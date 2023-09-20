@@ -18,7 +18,6 @@ Promise<AsyncHandler<TIn, TOut>> {
   for (const handler of handlers) {
     try {
       await handler.canHandle(input);
-
       return handler;
     } catch (error: unknown) {
       if (isError(error)) {

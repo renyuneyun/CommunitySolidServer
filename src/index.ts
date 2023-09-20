@@ -547,3 +547,7 @@ export * from './util/StringUtil';
 export * from './util/TermUtil';
 export * from './util/TimerUtil';
 export * from './util/Vocabularies';
+
+// DToU
+export * from './server/dtou/DtouRequestHandler';
+export * from './server/dtou/DtouOperationHandler';

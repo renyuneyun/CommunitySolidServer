@@ -22,6 +22,19 @@
             { "@id": "urn:solid-server:default:StorageDescriptionHandler" },
             { "@id": "urn:solid-server:default:AuthResourceHttpHandler" },
             { "@id": "urn:solid-server:default:IdentityProviderHandler" },
+            {
+              "comment": "Component for DToU.",
+              "@type": "DtouRequestHandler",
+              "args_credentialsExtractor": { "@id": "urn:solid-server:default:CredentialsExtractor" },
+              "args_requestParser": { "@id": "urn:solid-server:default:RequestParser" },
+              "args_errorHandler": { "@id": "urn:solid-server:default:ErrorHandler" },
+              "args_responseWriter": { "@id": "urn:solid-server:default:ResponseWriter" },
+              "args_operationHandler": {
+                "@type": "DtouOperationHandler",
+                "credentialsExtractor": { "@id": "urn:solid-server:default:CredentialsExtractor" },
+                "store": { "@id": "urn:solid-server:default:ResourceStore" }
+              }
+            },
             { "@id": "urn:solid-server:default:LdpHandler" }
           ]
         }
