@@ -1,10 +1,12 @@
-import N3 from 'n3';
+import N3, { BlankNode, DataFactory, NamedNode, Quad } from 'n3';
 // import { DataFactory } from 'n3';
 import namespace from '@rdfjs/namespace'
 import { QueryEngine, QueryEngineFactory } from '@comunica/query-sparql';
 
-const RDF = namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
-const DTOU = namespace("http://example.org/ns#");
+const IRI_DTOU = 'http://example.org/ns#';
+
+const RDF = namespace('http://www.w3.org/1999/02/22-rdf-syntax-ns#');
+const DTOU = namespace(IRI_DTOU);
 const P_A = RDF("type");
 const C_INPUTSPEC = DTOU("InputSpec");
 const C_APPPOLICY = DTOU("AppPolicy");
@@ -19,6 +21,12 @@ const myEngine = new QueryEngine();
 const PREFIXES = `
 PREFIX dtou: <http://example.org/ns#>
 `;
+
+export interface UsageContext {
+    time: Date;
+    user?: string;
+    appPolicyNode: string;
+}
 
 export function rdfToStore(rdfDoc: string) {
     const parser = new N3.Parser();
@@ -77,6 +85,16 @@ export async function extractOutputPortsFromAppPolicy(appPolicy:string) {
     return outputPorts;
 }
 
+export async function extractAppPolicyNode(appPolicy: string): Promise<string> {
+    const parser = new N3.Parser();
+    for (const quad of parser.parse(appPolicy)) {
+        if (quad.predicate.equals(P_A) && quad.object.equals(DTOU['AppPolicy'])) {
+            return quad.subject.value;
+        }
+    }
+    throw new Error('No policy node in Application Policy');
+}
+
 export function getDtouUrl(dataUrl: string): string {
     // return dataUrl.replace(".ttl", ".dtou.ttl");
     return `${dataUrl}.dtou`;
@@ -86,4 +104,34 @@ export async function getDtou(dataUrls: string[]) {
     return await Promise.all(
       dataUrls.map(async (u) => fetch(await getDtouUrl(u)).then(async (res) => await res.text()))
     )
+}
+
+export async function contextToPol(context: UsageContext): Promise<string> {
+    const writer = new N3.Writer({
+        prefixes: {
+        '': IRI_DTOU,
+        },
+    });
+
+    const nodeUsageContext = new NamedNode('urn:dtou:server#usage1');
+    const nodeApp = new BlankNode('app');
+
+    writer.addQuad(DataFactory.quad(nodeUsageContext, P_A, DTOU['UsageContext']));
+    if (context.user) {
+        writer.addQuad(DataFactory.quad(nodeUsageContext, DTOU['user'], DataFactory.literal(context.user)));
+    }
+    writer.addQuad(DataFactory.quad(nodeUsageContext, DTOU['app'], nodeApp));
+    writer.addQuad(DataFactory.quad(nodeUsageContext, DTOU['time'], DataFactory.literal(context.time.toISOString(), 'xsd:dateTime')));
+    writer.addQuad(DataFactory.quad(nodeApp, P_A, DTOU['AppInfo']));
+    writer.addQuad(DataFactory.quad(nodeApp, DTOU['policy'], DataFactory.namedNode(context.appPolicyNode)));
+
+    const getResultAsString = (): Promise<string> => new Promise((resolve, reject) => {
+        writer.end((error: any, result: string) => {
+        if (error) {
+            reject(error);
+        }
+        resolve(result);
+        });
+    });
+    return await getResultAsString();
 }

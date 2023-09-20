@@ -22,6 +22,8 @@ import {
   extractDataUrlFromAppPolicy,
   getDtouUrl,
   extractOutputPortsFromAppPolicy,
+  extractAppPolicyNode,
+  contextToPol,
 } from './helper';
 
 const MSG_IMPOSSIBLE_ROUTER = 'Illegal state. The router should be able to handle but no handler was called.';
@@ -44,11 +46,9 @@ interface DerivePolicyPostRequestData {
   url: string | string[];
 }
 
-const testPolicyShared = readFileSync(path_join(__dirname, './assets/dtou-policy-shared.n3s')).toString();
-const testPolicyUsageContext = readFileSync(path_join(__dirname, './assets/dtou-policy-usage1.n3s')).toString();
-
 interface AppPolicyInfo {
   policy: string;
+  policyNode: Promise<string>;
   dataUrls: Promise<string[]>;
   outputPorts: Promise<string[]>;
 }
@@ -170,11 +170,13 @@ export class DtouOperationHandler extends OperationHttpHandler {
     const body = await readableToString(operation.body.data);
     const appPolicy = bodyToDToU(body);
 
+    const policyNode = extractAppPolicyNode(appPolicy);
     const dataUrlsP = extractDataUrlFromAppPolicy(appPolicy);
     const outputPortsP = extractOutputPortsFromAppPolicy(appPolicy);
 
     const appPolicyInfo = {
       policy: appPolicy,
+      policyNode,
       dataUrls: dataUrlsP,
       outputPorts: outputPortsP,
     };
@@ -214,11 +216,18 @@ export class DtouOperationHandler extends OperationHttpHandler {
       ),
     );
     const dtouString = dtouList.join('\n');
+
+    const context = {
+      time: new Date(),
+      user: credentials.agent?.webId,
+      appPolicyNode: await appPolicyInfo.policyNode,
+    };
+    const contextString = await contextToPol(context);
+
     const conflict = await checkConflicts(
-      testPolicyShared,
       dtouString,
       appPolicyInfo.policy,
-      testPolicyUsageContext,
+      contextString,
     );
     return new ResponseDescription(
       200,
@@ -255,11 +264,18 @@ export class DtouOperationHandler extends OperationHttpHandler {
       ),
     );
     const dtouString = dtouList.join('\n');
+
+    const context = {
+      time: new Date(),
+      user: credentials.agent?.webId,
+      appPolicyNode: await appPolicyInfo.policyNode,
+    };
+    const contextString = await contextToPol(context);
+
     const conflict = await checkObligations(
-      testPolicyShared,
       dtouString,
       appPolicyInfo.policy,
-      testPolicyUsageContext,
+      contextString,
     );
     return new ResponseDescription(
       200,
@@ -301,11 +317,18 @@ export class DtouOperationHandler extends OperationHttpHandler {
       ),
     );
     const dtouString = dtouList.join('\n');
+
+    const context = {
+      time: new Date(),
+      user: credentials.agent?.webId,
+      appPolicyNode: await appPolicyInfo.policyNode,
+    };
+    const contextString = await contextToPol(context);
+
     const derivedPolicies = await derivePolicies(
-      testPolicyShared,
       dtouString,
       appPolicyInfo.policy,
-      testPolicyUsageContext,
+      contextString,
       port,
     );
 

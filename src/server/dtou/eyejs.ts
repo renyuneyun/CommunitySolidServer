@@ -30,13 +30,12 @@ export async function runDtouReasoning(sharedKnowledge: string, dataPolicy: stri
   return [conflicts, activatedObligations, derivedPolicy];
 }
 
-export async function checkConflicts(sharedKnowledge: string, dataPolicy: string, appPolicy: string, usageContext: string) {
+export async function checkConflicts(dataPolicy: string, appPolicy: string, usageContext: string) {
 
   const dataString = [
     langGeneral,
     langReasoning,
     lang,
-    sharedKnowledge,
     dataPolicy,
     appPolicy,
     usageContext,
@@ -45,13 +44,12 @@ export async function checkConflicts(sharedKnowledge: string, dataPolicy: string
   return await n3reasoner(dataString, queryConflict);
 }
 
-export async function checkObligations(sharedKnowledge: string, dataPolicy: string, appPolicy: string, usageContext: string) {
+export async function checkObligations(dataPolicy: string, appPolicy: string, usageContext: string) {
   
   const dataString = [
     langGeneral,
     langReasoning,
     lang,
-    sharedKnowledge,
     dataPolicy,
     appPolicy,
     usageContext,
@@ -60,12 +58,11 @@ export async function checkObligations(sharedKnowledge: string, dataPolicy: stri
   return await n3reasoner(dataString, queryObligation);
 }
 
-export async function derivePolicies(sharedKnowledge: string, dataPolicy: string, appPolicy: string, usageContext: string, port?: string) {
+export async function derivePolicies(dataPolicy: string, appPolicy: string, usageContext: string, port?: string) {
   const dataString = [
     langGeneral,
     langReasoning,
     lang,
-    sharedKnowledge,
     dataPolicy,
     appPolicy,
     usageContext,
