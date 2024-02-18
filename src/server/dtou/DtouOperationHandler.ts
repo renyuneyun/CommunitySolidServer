@@ -17,7 +17,7 @@ import type { OperationHttpHandlerInput } from '../OperationHttpHandler';
 import {
   OperationHttpHandler,
 } from '../OperationHttpHandler';
-import { checkConflicts, checkObligations, derivePolicies } from './eyejs';
+import { checkConflicts, checkObligations, derivePolicies, runBase, runBase2, runBase3 } from './eyejs';
 import {
   extractDataUrlFromAppPolicy,
   getDtouUrl,
@@ -38,9 +38,19 @@ function bodyToDToU(body: string): string {
   return appPolicy;
 }
 
+function bodyToBenchmarkPre(body: string) {
+  const obj = JSON.parse(body) as BenchmarkPreRequestData
+  return obj;
+}
+
 interface CheckComplianceRequestData {
   policy: string;
 }
+
+type BenchmarkPreRequestData = {
+  url: string;
+  policy: string;
+}[];
 
 interface DerivePolicyPostRequestData {
   url: string | string[];
@@ -73,6 +83,13 @@ export class DtouOperationHandler extends OperationHttpHandler {
     [ '/dtou', [ 'POST' ], DtouOperationHandler.prototype.handleRegister ],
     [ '/dtou/compliance', [ 'GET' ], DtouOperationHandler.prototype.handleCheckCompliance ],
     [ '/dtou/activated-obligations', [ 'GET' ], DtouOperationHandler.prototype.handleActivatedObligations ],
+    [ '/dtou/benchmark/pre', [ 'POST' ], DtouOperationHandler.prototype.handleBenchmarkPre ],
+    [ '/dtou/benchmark/base', [ 'GET' ], DtouOperationHandler.prototype.handleBenchmarkBase ],
+    [ '/dtou/benchmark/base2', [ 'GET' ], DtouOperationHandler.prototype.handleBenchmarkBase2 ],
+    [ '/dtou/benchmark/base3', [ 'GET' ], DtouOperationHandler.prototype.handleBenchmarkBase3 ],
+    [ '/dtou/benchmark/base4', [ 'GET' ], DtouOperationHandler.prototype.handleBenchmarkBase4 ],
+    [ '/dtou/benchmark/base5', [ 'GET' ], DtouOperationHandler.prototype.handleBenchmarkBase5 ],
+    [ '/dtou/benchmark/base6', [ 'GET' ], DtouOperationHandler.prototype.handleBenchmarkBase6 ],
   ];
 
   private static readonly pathMatchers: [RegExp, string[], (operation: Operation, credentials: Credentials) => Promise<ResponseDescription>][] = [
@@ -137,23 +154,35 @@ export class DtouOperationHandler extends OperationHttpHandler {
     request,
     response,
   }: OperationHttpHandlerInput): Promise<ResponseDescription> {
-    const path = operation.target.path.slice(this.baseUrl.length);
-    this.logger.verbose(path);
+    try {
+      const path = operation.target.path.slice(this.baseUrl.length);
+      this.logger.verbose(path);
 
-    const credentials = await this.credentialsExtractor.handleSafe(request);
-    this.logger.info(`Credentials: ${JSON.stringify(credentials)}`);
+      const credentials = await this.credentialsExtractor.handleSafe(request);
+      this.logger.info(`Credentials: ${JSON.stringify(credentials)}`);
 
-    for (const [ aPath, , method ] of DtouOperationHandler.paths) {
-      if (path === aPath) {
-        this.logger.info(`Match found: ${aPath} ${path}`);
-        return await method.call(this, operation, credentials);
+      for (const [ aPath, , method ] of DtouOperationHandler.paths) {
+        if (path === aPath) {
+          this.logger.info(`Match found: ${aPath} ${path}`);
+          return await method.call(this, operation, credentials);
+        }
       }
-    }
-    for (const [ matcher, , method ] of DtouOperationHandler.pathMatchers) {
-      if (matcher.test(path)) {
-        this.logger.info(`Match found: ${matcher} ${path}`);
-        return await method.call(this, operation, credentials);
+      for (const [ matcher, , method ] of DtouOperationHandler.pathMatchers) {
+        if (matcher.test(path)) {
+          this.logger.info(`Match found: ${matcher} ${path}`);
+          return await method.call(this, operation, credentials);
+        }
       }
+    } catch (err: unknown) {  // Not executed. Why? Matters for production, but not for evaluation
+      let msg: string;
+      if (typeof err === 'string') {
+        msg = err;
+      } else if (err instanceof Error) {
+        msg = err.message;
+      } else {
+        msg = 'Unknown error';
+      }
+      return new ResponseDescription(500, undefined, guardStream(Readable.from(msg)));
     }
 
     return new ResponseDescription(500, undefined, guardStream(Readable.from([ MSG_IMPOSSIBLE_ROUTER ])));
@@ -188,17 +217,14 @@ export class DtouOperationHandler extends OperationHttpHandler {
     );
   }
 
-  private async handleCheckCompliance(
+  private async _preHandle(
     operation: Operation,
     credentials: Credentials,
-  ): Promise<ResponseDescription> {
-    this.logger.info('handleCheckCompliance');
+  ): Promise<[AppPolicyInfo, string, string] | undefined> {
     const appId = credentials.client?.clientId ?? '';
     const appPolicyInfo = this.cachedAppPolicies.get(appId);
     if (!appPolicyInfo) {
-      return new ResponseDescription(411,
-        undefined,
-        guardStream(Readable.from([ MSG_APP_NOT_REGISTERED ])));
+      return undefined;
     }
 
     const dataUrls = await appPolicyInfo.dataUrls;
@@ -223,6 +249,23 @@ export class DtouOperationHandler extends OperationHttpHandler {
       appPolicyNode: await appPolicyInfo.policyNode,
     };
     const contextString = await contextToPol(context);
+
+    return [ appPolicyInfo, dtouString, contextString ];
+  }
+
+  private async handleCheckCompliance(
+    operation: Operation,
+    credentials: Credentials,
+  ): Promise<ResponseDescription> {
+    this.logger.info('handleCheckCompliance');
+
+    const res = await this._preHandle(operation, credentials);
+    if (!res) {
+      return new ResponseDescription(411,
+        undefined,
+        guardStream(Readable.from([ MSG_APP_NOT_REGISTERED ])));
+    }
+    const [ appPolicyInfo, dtouString, contextString ] = res;
 
     const conflict = await checkConflicts(
       dtouString,
@@ -241,36 +284,14 @@ export class DtouOperationHandler extends OperationHttpHandler {
     credentials: Credentials,
   ): Promise<ResponseDescription> {
     this.logger.info('handleActivatedObligations');
-    const appId = credentials.client?.clientId ?? '';
-    const appPolicyInfo = this.cachedAppPolicies.get(appId);
-    if (!appPolicyInfo) {
+
+    const res = await this._preHandle(operation, credentials);
+    if (!res) {
       return new ResponseDescription(401,
         undefined,
         guardStream(Readable.from([ MSG_APP_NOT_REGISTERED ])));
     }
-
-    const dataUrls = await appPolicyInfo.dataUrls;
-    const dtouList = await Promise.all(
-      dataUrls.map(
-        async(dataUrl): Promise<string> =>
-          await readableToString(
-            (
-              await this.store.getRepresentation(
-                { path: getDtouUrl(dataUrl) },
-                {},
-              )
-            ).data,
-          ),
-      ),
-    );
-    const dtouString = dtouList.join('\n');
-
-    const context = {
-      time: new Date(),
-      user: credentials.agent?.webId,
-      appPolicyNode: await appPolicyInfo.policyNode,
-    };
-    const contextString = await contextToPol(context);
+    const [ appPolicyInfo, dtouString, contextString ] = res;
 
     const conflict = await checkObligations(
       dtouString,
@@ -294,36 +315,13 @@ export class DtouOperationHandler extends OperationHttpHandler {
     const port = R_PORT.exec(path)?.[1];
     this.logger.info(`Getting for port: <${port}>`);
 
-    const appId = credentials.client?.clientId ?? '';
-    const appPolicyInfo = this.cachedAppPolicies.get(appId);
-    if (!appPolicyInfo) {
+    const res = await this._preHandle(operation, credentials);
+    if (!res) {
       return new ResponseDescription(401,
         undefined,
         guardStream(Readable.from([ MSG_APP_NOT_REGISTERED ])));
     }
-
-    const dataUrls = await appPolicyInfo.dataUrls;
-    const dtouList = await Promise.all(
-      dataUrls.map(
-        async(dataUrl): Promise<string> =>
-          await readableToString(
-            (
-              await this.store.getRepresentation(
-                { path: getDtouUrl(dataUrl) },
-                {},
-              )
-            ).data,
-          ),
-      ),
-    );
-    const dtouString = dtouList.join('\n');
-
-    const context = {
-      time: new Date(),
-      user: credentials.agent?.webId,
-      appPolicyNode: await appPolicyInfo.policyNode,
-    };
-    const contextString = await contextToPol(context);
+    const [ appPolicyInfo, dtouString, contextString ] = res;
 
     const derivedPolicies = await derivePolicies(
       dtouString,
@@ -350,6 +348,190 @@ export class DtouOperationHandler extends OperationHttpHandler {
       200,
       undefined,
       guardStream(Readable.from([ derivedPolicies ])),
+    );
+  }
+
+  private async handleBenchmarkPre(
+    operation: Operation,
+    credentials: Credentials,
+  ): Promise<ResponseDescription> {
+    this.logger.info('handleBenchmarkPre');
+
+    const body = await readableToString(operation.body.data);
+    const parsedBody = bodyToBenchmarkPre(body);
+
+    for (const dataDesc of parsedBody) {
+      const dataResourceIdentifier: ResourceIdentifier = { path: dataDesc.url };
+      const dataRepresentation: Representation = new BasicRepresentation();
+      await this.store.setRepresentation(dataResourceIdentifier, dataRepresentation);
+
+      const dataDtouResourceIdentifier: ResourceIdentifier = { path: getDtouUrl(dataDesc.url) };
+      const dataDtouRepresentation: Representation = new BasicRepresentation(dataDesc.policy, 'text/turtle');
+      await this.store.setRepresentation(dataDtouResourceIdentifier, dataDtouRepresentation);
+    }
+
+    return new ResponseDescription(
+      200,
+    );
+  }
+
+  private async handleBenchmarkBase(
+    operation: Operation,
+    credentials: Credentials,
+  ): Promise<ResponseDescription> {
+    this.logger.info('handleBenchmarkBase');
+
+    const res = await this._preHandle(operation, credentials);
+    if (!res) {
+      return new ResponseDescription(401,
+        undefined,
+        guardStream(Readable.from([ MSG_APP_NOT_REGISTERED ])));
+    }
+    const [ appPolicyInfo, dtouString, contextString ] = res;
+
+    const conflict = await runBase(
+      dtouString,
+      appPolicyInfo.policy,
+      contextString,
+    );
+    return new ResponseDescription(
+      200,
+      undefined,
+      guardStream(Readable.from([ conflict ])),
+    );
+  }
+
+  private async handleBenchmarkBase2(
+    operation: Operation,
+    credentials: Credentials,
+  ): Promise<ResponseDescription> {
+    this.logger.info('handleBenchmarkBase2');
+
+    const res = await this._preHandle(operation, credentials);
+    if (!res) {
+      return new ResponseDescription(401,
+        undefined,
+        guardStream(Readable.from([ MSG_APP_NOT_REGISTERED ])));
+    }
+    const [ appPolicyInfo, dtouString, contextString ] = res;
+
+    const conflict = await runBase2(
+      dtouString,
+      appPolicyInfo.policy,
+      contextString,
+    );
+    return new ResponseDescription(
+      200,
+      undefined,
+      guardStream(Readable.from([ conflict ])),
+    );
+  }
+
+  private async handleBenchmarkBase3(
+    operation: Operation,
+    credentials: Credentials,
+  ): Promise<ResponseDescription> {
+    this.logger.info('handleBenchmarkBase3');
+
+    const res = await this._preHandle(operation, credentials);
+    if (!res) {
+      return new ResponseDescription(401,
+        undefined,
+        guardStream(Readable.from([ MSG_APP_NOT_REGISTERED ])));
+    }
+    const [ appPolicyInfo, dtouString, contextString ] = res;
+
+    const conflict = await runBase3(
+      0,
+      dtouString,
+      appPolicyInfo.policy,
+      contextString,
+    );
+    return new ResponseDescription(
+      200,
+      undefined,
+      guardStream(Readable.from([ conflict ])),
+    );
+  }
+
+  private async handleBenchmarkBase4(
+    operation: Operation,
+    credentials: Credentials,
+  ): Promise<ResponseDescription> {
+    this.logger.info('handleBenchmarkBase4');
+
+    const res = await this._preHandle(operation, credentials);
+    if (!res) {
+      return new ResponseDescription(401,
+        undefined,
+        guardStream(Readable.from([ MSG_APP_NOT_REGISTERED ])));
+    }
+    const [ appPolicyInfo, dtouString, contextString ] = res;
+
+    const conflict = await runBase3(
+      1,
+      dtouString,
+      appPolicyInfo.policy,
+      contextString,
+    );
+    return new ResponseDescription(
+      200,
+      undefined,
+      guardStream(Readable.from([ conflict ])),
+    );
+  }
+
+  private async handleBenchmarkBase5(
+    operation: Operation,
+    credentials: Credentials,
+  ): Promise<ResponseDescription> {
+    this.logger.info('handleBenchmarkBase5');
+
+    const res = await this._preHandle(operation, credentials);
+    if (!res) {
+      return new ResponseDescription(401,
+        undefined,
+        guardStream(Readable.from([ MSG_APP_NOT_REGISTERED ])));
+    }
+    const [ appPolicyInfo, dtouString, contextString ] = res;
+
+    const conflict = await runBase3(
+      2,
+      dtouString,
+      appPolicyInfo.policy,
+      contextString,
+    );
+    return new ResponseDescription(
+      200,
+      undefined,
+      guardStream(Readable.from([ conflict ])),
+    );
+  }
+
+  private async handleBenchmarkBase6(
+    operation: Operation,
+    credentials: Credentials,
+  ): Promise<ResponseDescription> {
+    this.logger.info('handleBenchmarkBase6');
+
+    const res = await this._preHandle(operation, credentials);
+    if (!res) {
+      return new ResponseDescription(401,
+        undefined,
+        guardStream(Readable.from([ MSG_APP_NOT_REGISTERED ])));
+    }
+    const [ appPolicyInfo, dtouString, contextString ] = res;
+
+    const conflict = await runBase3(
+      3,
+      dtouString,
+      appPolicyInfo.policy,
+      contextString,
+    );
+    return new ResponseDescription(
+      200,
+      undefined,
+      guardStream(Readable.from([ conflict ])),
     );
   }
 }

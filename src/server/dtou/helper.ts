@@ -40,8 +40,8 @@ async function query(rdfDoc: string, query: string) {
   return (await myEngine.queryBindings(
     `${PREFIXES}\n${query}`,
     {
-      sources: [ rdfToStore(rdfDoc) ]
-    }
+      sources: [ rdfToStore(rdfDoc) ],
+    },
   )).toArray();
 }
 
