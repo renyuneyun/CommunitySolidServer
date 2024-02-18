@@ -136,7 +136,7 @@
     "ejs": "^3.1.9",
     "end-of-stream": "^1.4.4",
     "escape-string-regexp": "^4.0.0",
-    "eyereasoner": "^6.6.7",
+    "eyereasoner": "^6.9.5",
     "fetch-sparql-endpoint": "^3.2.1",
     "fs-extra": "^11.1.1",
     "handlebars": "^4.7.7",
