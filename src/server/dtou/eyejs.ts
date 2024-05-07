@@ -3,21 +3,21 @@ import { n3reasoner, SwiplEye, queryOnce } from 'eyereasoner';
 import { join as path_join } from 'path';
 import { getDerivedPolicyForPort } from './result_helper';
 
-const langGeneral = readFileSync(path_join(__dirname, './assets/dtou-lang-general.n3s')).toString();
-// const langReasoning = readFileSync(path_join(__dirname, './assets/dtou-lang-reasoning.n3s')).toString();
-const langReasoningConflict = readFileSync(path_join(__dirname, './assets/dtou-lang2-reasoning-compliance.n3s')).toString();
-const langReasoningObligation = readFileSync(path_join(__dirname, './assets/dtou-lang2-reasoning-obligation.n3s')).toString();
-const langReasoningDerivation = readFileSync(path_join(__dirname, './assets/dtou-lang2-reasoning-derivation.n3s')).toString();
-const lang = readFileSync(path_join(__dirname, './assets/dtou-lang.n3s')).toString();
-const queryConflict = readFileSync(path_join(__dirname, './assets/dtou-query-conflict.n3s')).toString();
-const queryObligation = readFileSync(path_join(__dirname, './assets/dtou-query-obligation.n3s')).toString();
-const queryDerived = readFileSync(path_join(__dirname, './assets/dtou-query-derived.n3s')).toString();
+const langGeneral = readFileSync(path_join(__dirname, './assets/dtou-lang/dtou-lang-general.n3s')).toString();
+const langReasoning = readFileSync(path_join(__dirname, './assets/dtou-lang/dtou-lang-reasoning.n3s')).toString();
+const langReasoningConflict = readFileSync(path_join(__dirname, './assets/dtou-lang/dtou-lang2-reasoning-compliance.n3s')).toString();
+const langReasoningObligation = readFileSync(path_join(__dirname, './assets/dtou-lang/dtou-lang2-reasoning-obligation.n3s')).toString();
+const langReasoningDerivation = readFileSync(path_join(__dirname, './assets/dtou-lang/dtou-lang2-reasoning-derivation.n3s')).toString();
+const lang = readFileSync(path_join(__dirname, './assets/dtou-lang/dtou-lang.n3s')).toString();
+const queryConflict = readFileSync(path_join(__dirname, './assets/dtou-lang/dtou-query-conflict.n3s')).toString();
+const queryObligation = readFileSync(path_join(__dirname, './assets/dtou-lang/dtou-query-obligation.n3s')).toString();
+const queryDerived = readFileSync(path_join(__dirname, './assets/dtou-lang/dtou-query-derived.n3s')).toString();
 
 const langReasoningBase3 = [
-  readFileSync(path_join(__dirname, './assets/dtou-lang3-reasoning-bare.n3s')).toString(),
-  readFileSync(path_join(__dirname, './assets/dtou-lang3-reasoning-conflict1.n3s')).toString(),
-  readFileSync(path_join(__dirname, './assets/dtou-lang3-reasoning-conflict2.n3s')).toString(),
-  readFileSync(path_join(__dirname, './assets/dtou-lang3-reasoning-conflict3.n3s')).toString(),
+  readFileSync(path_join(__dirname, './assets/dtou-lang/dtou-lang3-reasoning-bare.n3s')).toString(),
+  readFileSync(path_join(__dirname, './assets/dtou-lang/dtou-lang3-reasoning-conflict1.n3s')).toString(),
+  readFileSync(path_join(__dirname, './assets/dtou-lang/dtou-lang3-reasoning-conflict2.n3s')).toString(),
+  readFileSync(path_join(__dirname, './assets/dtou-lang/dtou-lang3-reasoning-conflict3.n3s')).toString(),
 ];
 
 // /**

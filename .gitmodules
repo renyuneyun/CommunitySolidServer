@@ -1,0 +1,3 @@
+[submodule "submodules/dtou-lang"]
+	path = submodules/dtou-lang
+	url = git@github.com:renyuneyun/dtou-lang.git
